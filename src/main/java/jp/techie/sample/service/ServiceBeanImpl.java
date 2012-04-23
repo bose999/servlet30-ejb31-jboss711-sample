@@ -15,7 +15,7 @@
  */
 package jp.techie.sample.service;
 
-import javax.ejb.Singleton;
+import javax.ejb.LocalBean;
 import javax.ejb.Stateless;
 
 import jp.techie.sample.util.LogUtil;
@@ -26,7 +26,8 @@ import jp.techie.sample.util.LogUtil;
  * @author bose999
  *
  */
-@Singleton
+@Stateless
+@LocalBean
 public class ServiceBeanImpl {
     
     /**

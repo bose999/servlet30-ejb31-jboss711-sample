@@ -18,7 +18,8 @@ package jp.techie.sample.action;
 import javax.annotation.Resource;
 import javax.ejb.Asynchronous;
 import javax.ejb.EJB;
-import javax.ejb.Singleton;
+import javax.ejb.LocalBean;
+import javax.ejb.Stateless;
 import javax.ejb.TransactionManagement;
 import javax.ejb.TransactionManagementType;
 import javax.servlet.AsyncContext;
@@ -35,7 +36,8 @@ import jp.techie.sample.util.LogUtil;
  * @author bose999
  *
  */
-@Singleton
+@Stateless
+@LocalBean
 @TransactionManagement(TransactionManagementType.BEAN)
 public class ActionBeanImpl {
 
