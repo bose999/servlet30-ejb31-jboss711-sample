@@ -37,7 +37,6 @@ import jp.techie.sample.util.LogUtil;
  *
  */
 @Stateless
-@LocalBean
 @TransactionManagement(TransactionManagementType.BEAN)
 public class ActionBeanImpl {
 
