@@ -15,100 +15,98 @@
  */
 package jp.techie.sample.action;
 
-import javax.annotation.Resource;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
 import javax.ejb.Asynchronous;
 import javax.ejb.EJB;
-import javax.ejb.LocalBean;
 import javax.ejb.Stateless;
 import javax.ejb.TransactionManagement;
 import javax.ejb.TransactionManagementType;
 import javax.servlet.AsyncContext;
-import javax.transaction.UserTransaction;
 
+import jp.techie.sample.exception.SampleException;
 import jp.techie.sample.service.ServiceBeanImpl;
 import jp.techie.sample.util.LogUtil;
 
 /**
  * BMTでトランザクションを実装したサンプル<br />
- * EJB3.1はインターフェイスも要らない<br />
- * シングルトンとしてインスタンス化
+ * EJB3.1はインターフェイスも要らない
  * 
  * @author bose999
  *
  */
 @Stateless
-@TransactionManagement(TransactionManagementType.BEAN)
+@TransactionManagement(TransactionManagementType.CONTAINER)
 public class ActionBeanImpl {
 
     /**
      * ログユーティリティ
      */
     public static LogUtil logUtil = new LogUtil(ActionBeanImpl.class);
-    
-    /**
-     * UserTransaction
-     */
-    @Resource
-    private UserTransaction usrTransaction;
 
     /**
-    * 非同期処理をするEJB<br />
+    * サービスクラス<br />
     * EJBコンテナによりDIされる
     */
     @EJB
     private ServiceBeanImpl serviceBeanImpl;
 
     /**
-     * 非同期サーブレットから呼び出す非同期メソッド
+     * サーブレットから非同期で呼び出されて<br />
+     * 非同期サービスクラスを実行してハンドリングする
      * 
      * @param asyncContext
      */
     @Asynchronous
     public void execute(AsyncContext asyncContext) {
-        // サーブレットから呼び出され処理を非同期で開始
-        // このメッソドを先頭にしてトランザクションを開始する
-        try {
-            long startTime = 0;
-            if (logUtil.isInfoEnabled()) {
-                // EJB処理開始ログ
-                startTime = System.currentTimeMillis();
-                logUtil.info("Start Asynchronous EJB Method");
-            }
-            
-            // トランザクションタイムアウトを設定する
-            // ブラウザのタイムアウトよりも短い280sでとりあえず設定
-            usrTransaction.setTransactionTimeout(280);
-            
-            // トランザクション開始
-            usrTransaction.begin();
-
-            // サービスクラス実行
-            String dispatchUrl = serviceBeanImpl.execute();
-            
-            // トランザクションコミット
-            usrTransaction.commit();
-            
-            // ビジネスロジックをの返り値でdispatch
-            // コミット前にコールしてしまうとcommit時の例外が拾えないでコミット後
-            asyncContext.dispatch(dispatchUrl);
-
-            if (logUtil.isInfoEnabled()) {
-                // EJB処理終了ログ
-                long doTime = System.currentTimeMillis() - startTime;
-                logUtil.info("End Asynchronous EJB Method:" + doTime + "ms.");
-            }
-        } catch (Exception e) {
-          //例外が上がってきたのでトランザクションをロールバック
-            logUtil.fatal("execute:Exception Transaction RollBack",e);
-            try {
-                usrTransaction.rollback();
-            } catch (Exception e2) {
-                logUtil.fatal("execute:Transaction RollBack Exception",e);
-            }
-            logUtil.fatal("execute:move errorPage");
-            // サービスクラスでの処理においてExceptionが発生した為 エラーページへ遷移させる
-            // サンプルとして大雑把な記述。。。
-            asyncContext.dispatch("/WEB-INF/jsp/error.jsp");
+        long startTime = 0;
+        if (logUtil.isInfoEnabled()) {
+            // EJB処理開始ログ
+            startTime = System.currentTimeMillis();
+            logUtil.info("Start Asynchronous Method");
         }
+
+        String dispatchUrl = "/";
+        Future<String> serviceRetrun = null;
+        try {
+            // 非同期実行
+            serviceRetrun = serviceBeanImpl.execute();
+            // 10秒でタイムアウトを設定（あくまでサンプル）
+            dispatchUrl = serviceRetrun.get(10, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            dispatchUrl = dispatchForException(asyncContext, e);
+        } catch (ExecutionException e) {
+            dispatchUrl = dispatchForException(asyncContext, e);
+        } catch (TimeoutException e) {
+            // タイムアウトなので処理をキャンセル
+            // タイミングによってスレッドを止められないケースがあるが一応コール
+            serviceRetrun.cancel(true);
+            dispatchUrl = dispatchForException(asyncContext, e);
+        } catch (SampleException e) {
+            dispatchUrl = dispatchForException(asyncContext, e);
+        }
+
+        // 処理結果で遷移
+        asyncContext.dispatch(dispatchUrl);
+
+        if (logUtil.isInfoEnabled()) {
+            // EJB処理終了ログ
+            long doTime = System.currentTimeMillis() - startTime;
+            logUtil.info("End Asynchronous Method:" + doTime + "ms.");
+        }
+    }
+
+    /**
+     * Exception時のエラーページへのdispatch
+     * 
+     * @param asyncContext AsyncContext
+     * @param e Exception
+     */
+    private String dispatchForException(AsyncContext asyncContext, Exception e) {
+        logUtil.fatal("execute:Exception Transaction RollBack", e);
+        return "/WEB-INF/jsp/error.jsp";
     }
 }

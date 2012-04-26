@@ -60,8 +60,7 @@ public class SampleServlet extends HttpServlet {
         // 非同期処理準備
         AsyncContext asyncContext = request.startAsync();
 
-        // EJBの非同期処理を実行
-        // Servletコンテナだけの時とは違いListnerは利用しない
+        // 非同期にてSLSBを実行しrequest処理を終える
         actionBeanImpl.execute(asyncContext);
 
         if (logUtil.isInfoEnabled()) {
